@@ -36,7 +36,7 @@ class Delaunay(object):
         self.triangles = []
         for h1,h2 in zip(convex_hull, np.concatenate((convex_hull[1:],
                                                       [convex_hull[0]]))):
-            self.triangles.append([h1, h2, middle_point])
+            self.triangles.append(sort([h1, h2, middle_point]))
         
 
     def get_convex_hull(self):
@@ -85,18 +85,9 @@ class Delaunay(object):
         return math.sqrt(math.pow(p1[0] - p2[0], 2) + math.pow(p1[1] - p2[1], 2))
 
     def plot(self):
-        fig = plt.figure(figsize=(5,5))
+        fig = plt.figure(figsize=(8,8))
         ax = plt.axes([0,0,1,1])        
         scatter(self.x, self.y)
-
-        # Draw convex hull.
-        for i in range(len(self.convex_hull)-1):
-            plot([self.x[self.convex_hull[i]], self.x[self.convex_hull[i+1]]],
-                 [self.y[self.convex_hull[i]], self.y[self.convex_hull[i+1]]],
-                 'r', lw=4)
-        plot([self.x[self.convex_hull[0]], self.x[self.convex_hull[-1]]],
-             [self.y[self.convex_hull[0]], self.y[self.convex_hull[-1]]],
-             'r', lw=4)
 
         # Draw triangles.
         patches = []
