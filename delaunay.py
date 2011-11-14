@@ -1,6 +1,6 @@
 from pylab import *
 import numpy as np
-from random import random
+import random
 import itertools
 import math
 
@@ -9,12 +9,14 @@ from matplotlib.collections import PatchCollection
 import matplotlib.patches as mpatches
 
 class Delaunay(object):
-    def __init__(self, n):
+    def __init__(self, n, seed=None):
+        if seed is not None:
+            random.seed(seed)
         self.gen_random_points(n)
 
     def gen_random_points(self, n):
         """Generate random points in [0,1] x [0,1]."""
-        self.points = np.array([random() for i in range(2*n)]).reshape((n,2))
+        self.points = np.array([random.random() for i in range(2*n)]).reshape((n,2))
 
     @property
     def x(self):
@@ -25,19 +27,155 @@ class Delaunay(object):
         return self.points[:,1]
 
     def triangulation(self):
-        convex_hull = self.get_convex_hull()
-        self.convex_hull = convex_hull
+        self.convex_hull = self.get_convex_hull()
+
+        self.triangle_id = 0
+        self.triangles = {}
+        self.edge_mapping = {}
+
+        middle_point = self.initial_triangles_from_hull()
+
+        # Add remaining points incrementally.
+        remaining_points = [i for i in range(len(self.points))
+                            if i not in self.convex_hull and i != middle_point]
+
+        for p in remaining_points:
+            in_triangle = self.point_in_triangle(p)
+            self.split_triangle(in_triangle, p)
+
+    def split_triangle(self, tri_id, point_id):
+        """Split the triangle with ID tri_id into three triangles using the
+        given point_id."""
+        parent_triangle = self.triangles[tri_id]
+        self.remove_triangle(tri_id)
+        for a,b in itertools.combinations(parent_triangle, 2):
+            new_triangle = sort([a, b, point_id])
+            self.add_triangle(new_triangle)
+            for key in itertools.combinations(new_triangle, 2):
+                if self.check_and_flip(key):
+                    break
+
+    def point_in_triangle(self, p):
+        """Determine the triangle that p is inside by searching for
+        the triangle ABC for which the sum of the angles ApB, BpC,
+        and CpA is 2*pi."""
+        for id,triangle in self.triangles.iteritems():
+            angle_sum = 0
+            for a,b in itertools.combinations(triangle, 2):
+                temp_triangle = [a, b, p]
+                angle_sum += self.get_angle(temp_triangle, p)
+            if np.allclose([angle_sum], [2*math.pi], 1e-10, 0):
+                return id
+
+    def add_triangle(self, corners):
+        """Add new triangle with given corners."""
+        tri_id = self.triangle_id
+        self.triangle_id += 1
+        self.triangles[tri_id] = corners
+        for key in itertools.combinations(corners, 2):
+            if self.edge_mapping.has_key(key):
+                self.edge_mapping[key].add(tri_id)
+            else:
+                self.edge_mapping[key] = set([tri_id])
+        return tri_id
+
+    def remove_triangle(self, id):
+        """Remove the triangle with the given ID."""
+        corners = self.triangles[id]
+        for key in itertools.combinations(corners, 2):
+            self.edge_mapping[key].difference_update([id])
+        del[self.triangles[id]]
+
+    def initial_triangles_from_hull(self):
         # Find point not in convex hull boundary and then use it to make
         # triangles with the convex hull boundary points.
         for middle_point in range(len(self.points)):
-            if middle_point not in convex_hull:
+            if middle_point not in self.convex_hull:
                 break
 
-        self.triangles = []
-        for h1,h2 in zip(convex_hull, np.concatenate((convex_hull[1:],
-                                                      [convex_hull[0]]))):
-            self.triangles.append(sort([h1, h2, middle_point]))
-        
+        for h1,h2 in zip(self.convex_hull, np.concatenate((self.convex_hull[1:],
+                                                           [self.convex_hull[0]]))):
+            tri_edges = sort([h1, h2, middle_point])
+            self.add_triangle(tri_edges)
+            for key in itertools.combinations(tri_edges, 2):
+                if self.check_and_flip(key):
+                    break
+
+        #print 'after!'
+
+        for tri_id, triangle in self.triangles.iteritems():
+            for key in itertools.combinations(triangle, 2):
+                # Get the other triangle sharing this edge, if one exists.
+                if len(self.edge_mapping[key]) == 2:
+                    angle1 = self.get_angle(triangle, list(set(triangle)-set(key))[0])
+                    tri_id2 = list(self.edge_mapping[key].difference([tri_id]))[0]
+                    triangle2 = self.triangles[tri_id2]
+                    angle2 = self.get_angle(triangle2, list(set(triangle2)-set(key))[0])
+
+                    #if angle1+angle2 > math.pi:
+                        #print '!!! {}'.format(angle1+angle2)
+        return middle_point
+
+    def check_and_flip(self, shared_edge):
+        """Check an adjacent pair of triangles and flip if necessary."""
+        if len(self.edge_mapping[shared_edge]) == 2:
+            id1 = list(self.edge_mapping[shared_edge])[0]
+            id2 = list(self.edge_mapping[shared_edge])[1]
+            tri1 = self.triangles[id1]
+            angle1 = self.get_angle(tri1, list(set(tri1)-set(shared_edge))[0])
+            tri2 = self.triangles[id2]
+            angle2 = self.get_angle(tri2, list(set(tri2)-set(shared_edge))[0])
+
+            if angle1+angle2 > math.pi:
+                self.flip(id1, id2)
+                #print '@@@ {}'.format(angle1+angle2)
+                return True
+        return False
+
+    def flip(self, id1, id2):
+        """Flip the common edge between two adjacent triangles."""
+        tri1 = self.triangles[id1]
+        tri2 = self.triangles[id2]
+        shared_edge = sort(list(set(tri1).intersection(tri2)))
+        new_edge = sort(list(set(np.concatenate((tri1, tri2))).difference(shared_edge)))
+
+        new_tri1 = sort(np.concatenate((new_edge, [shared_edge[0]])))
+        new_tri2 = sort(np.concatenate((new_edge, [shared_edge[1]])))
+
+        self.edge_mapping[tuple(new_edge)] = self.edge_mapping[tuple(shared_edge)]
+        del(self.edge_mapping[tuple(shared_edge)])
+
+        self.triangles[id1] = new_tri1
+        self.triangles[id2] = new_tri2
+
+        for key in itertools.combinations(new_tri1, 2):
+            if key != tuple(new_edge):
+                self.edge_mapping[key].difference_update([id2])
+                self.edge_mapping[key].add(id1)
+
+        for key in itertools.combinations(new_tri2, 2):
+            if key != tuple(new_edge):
+                self.edge_mapping[key].difference_update([id1])
+                self.edge_mapping[key].add(id2)
+
+        for key in itertools.combinations(self.triangles[id1], 2):
+            if self.check_and_flip(key):
+                break
+
+        for key in itertools.combinations(self.triangles[id2], 2):
+            if self.check_and_flip(key):
+                break
+
+    def get_angle(self, triangle, corner):
+        """Find the angle of the given corner of the given triangle."""
+        non_corner = list(set(triangle) - set([corner]))
+        # a is the edge opposite the corner
+        a = self.point_distance(self.points[non_corner[0]], self.points[non_corner[1]])
+
+        b = self.point_distance(self.points[corner], self.points[non_corner[0]])
+        c = self.point_distance(self.points[corner], self.points[non_corner[1]])
+
+        return math.acos((math.pow(b, 2) + math.pow(c, 2) - math.pow(a, 2)) / (2*b*c))
 
     def get_convex_hull(self):
         """Compute the convex hull of the point cloud using Graham scan."""
@@ -62,7 +200,7 @@ class Delaunay(object):
         # Make sure the last point added does not introduce a right turn
         # to our first point.
         if self.is_right_turn(convex_hull, convex_hull[0]):
-            self.convex_hull.pop()
+            convex_hull.pop()
 
         return np.array(convex_hull, dtype=np.int)
 
@@ -91,7 +229,7 @@ class Delaunay(object):
 
         # Draw triangles.
         patches = []
-        for triangle in self.triangles:
+        for triangle in self.triangles.itervalues():
             patches.append(self.draw_circumcircle(triangle))
             for i1,i2 in itertools.combinations(range(3), 2):
                 p1 = triangle[i1]
@@ -134,7 +272,28 @@ class Delaunay(object):
         mpy = (self.y[id1] + self.y[id2]) / 2
         return mpx,mpy
 
-d = Delaunay(20)
+    def validate_triangulation(self):
+        """Go through the triangles and validate that the triangulation
+        is Delaunay."""
+        print "Validation:"
+        for tri_id, triangle in self.triangles.iteritems():
+            for key in itertools.combinations(triangle, 2):
+                # Get the other triangle sharing this edge, if one exists.
+                if len(self.edge_mapping[key]) == 2:
+                    angle1 = self.get_angle(triangle, list(set(triangle)-set(key))[0])
+                    tri_id2 = list(self.edge_mapping[key].difference([tri_id]))[0]
+                    triangle2 = self.triangles[tri_id2]
+                    angle2 = self.get_angle(triangle2, list(set(triangle2)-set(key))[0])
+
+                    if angle1+angle2 > math.pi:
+                        print "!!!\t{}".format(angle1+angle2)
+                        raise "Not Delaunay"
+                    else:
+                        print "\t{}".format(angle1+angle2)
+        print "\tIs Delaunay!"
+
+d = Delaunay(50)
 d.triangulation()
+d.validate_triangulation()
 d.plot()
 show()
