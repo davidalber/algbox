@@ -84,7 +84,9 @@ class Delaunay(object):
         corners = self.triangles[id]
         for key in itertools.combinations(corners, 2):
             self.edge_mapping[key].difference_update([id])
-        del[self.triangles[id]]
+            if len(self.edge_mapping[key]) == 0:
+                del(self.edge_mapping[key])
+        del(self.triangles[id])
 
     def initial_triangles_from_hull(self):
         # Find point not in convex hull boundary and then use it to make
@@ -243,6 +245,12 @@ class Delaunay(object):
         axis((0, 1, 0, 1))
 
     def draw_circumcircle(self, triangle):
+        [center_x, center_y], radius = self.get_circumcircle(triangle)
+        return mpatches.Circle([center_x, center_y], radius, ec="none")
+
+    def get_circumcircle(self, triangle):
+        """Return the center and radius of the given triangle's
+        circumcircle."""
         # Get the midpoints of two of the triangle's edges.
         mp1x,mp1y = self.get_midpoint(triangle[0], triangle[1])
         mp1_slope = -1./self.get_slope(triangle[0], triangle[1])
@@ -256,8 +264,8 @@ class Delaunay(object):
         center_x = (mp2_intercept - mp1_intercept) / (mp1_slope - mp2_slope)
         center_y = mp1y + mp1_slope * (center_x - mp1x)
         radius = self.point_distance([center_x, center_y], self.points[triangle[0]])
-        
-        return mpatches.Circle([center_x, center_y], radius, ec="none")
+
+        return [center_x, center_y], radius
 
     def get_intercept(self, slope, x, y):
         return y - slope*x
@@ -277,22 +285,31 @@ class Delaunay(object):
         is Delaunay."""
         print "Validation:"
         for tri_id, triangle in self.triangles.iteritems():
-            for key in itertools.combinations(triangle, 2):
-                # Get the other triangle sharing this edge, if one exists.
-                if len(self.edge_mapping[key]) == 2:
-                    angle1 = self.get_angle(triangle, list(set(triangle)-set(key))[0])
-                    tri_id2 = list(self.edge_mapping[key].difference([tri_id]))[0]
-                    triangle2 = self.triangles[tri_id2]
-                    angle2 = self.get_angle(triangle2, list(set(triangle2)-set(key))[0])
-
-                    if angle1+angle2 > math.pi:
-                        print "!!!\t{}".format(angle1+angle2)
-                        raise "Not Delaunay"
-                    else:
-                        print "\t{}".format(angle1+angle2)
+            [center_x, center_y], radius = self.get_circumcircle(triangle)
+            outside_point_ids = [pid for pid in range(len(self.points))
+                                 if pid not in triangle]
+            for pid in outside_point_ids:
+                dist = self.point_distance([center_x, center_y], self.points[pid])
+                if dist < radius:
+                    raise "Not Delaunay"
         print "\tIs Delaunay!"
 
-d = Delaunay(50)
+        ##     for key in itertools.combinations(triangle, 2):
+        ##         # Get the other triangle sharing this edge, if one exists.
+        ##         if len(self.edge_mapping[key]) == 2:
+        ##             angle1 = self.get_angle(triangle, list(set(triangle)-set(key))[0])
+        ##             tri_id2 = list(self.edge_mapping[key].difference([tri_id]))[0]
+        ##             triangle2 = self.triangles[tri_id2]
+        ##             angle2 = self.get_angle(triangle2, list(set(triangle2)-set(key))[0])
+
+        ##             if angle1+angle2 > math.pi:
+        ##                 print "!!!\t{}".format(angle1+angle2)
+        ##                 raise "Not Delaunay"
+        ##             else:
+        ##                 print "\t{}".format(angle1+angle2)
+        ## print "\tIs Delaunay!"
+
+d = Delaunay(100)
 d.triangulation()
 d.validate_triangulation()
 d.plot()
