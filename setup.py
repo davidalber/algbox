@@ -32,5 +32,6 @@ setup(name='Algbox',
     entry_points={
         'console_scripts':
             ['delaunay=algbox:do_delaunay']
-    }
+    },
+    test_suite = 'tests'
 )
