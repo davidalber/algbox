@@ -1,3 +1,4 @@
+import argparse
 from pylab import *
 import numpy as np
 import random
@@ -9,14 +10,21 @@ from matplotlib.collections import PatchCollection
 import matplotlib.patches as mpatches
 
 class Delaunay(object):
-    def __init__(self, n, seed=None):
+    def __init__(self, n, seed=None, summary=False, verbose=False):
         if seed is not None:
             random.seed(seed)
-        self.gen_random_points(n)
+        self.points = self.gen_random_points(n)
+        self.summary = summary
+        if summary:
+            self.ntriangles = 0
+            self.nadds = 0
+            self.nremoves = 0
+            self.nflips = 0
+        self.verbose = verbose
 
     def gen_random_points(self, n):
         """Generate random points in [0,1] x [0,1]."""
-        self.points = np.array([random.random() for i in range(2*n)]).reshape((n,2))
+        return np.array([random.random() for i in range(2*n)]).reshape((n,2))
 
     @property
     def x(self):
@@ -40,6 +48,8 @@ class Delaunay(object):
                             if i not in self.convex_hull and i != middle_point]
 
         for p in remaining_points:
+            if self.verbose:
+                print 'Adding point {}'.format(p)
             in_triangle = self.point_in_triangle(p)
             self.split_triangle(in_triangle, p)
 
@@ -47,9 +57,20 @@ class Delaunay(object):
         """Split the triangle with ID tri_id into three triangles using the
         given point_id."""
         parent_triangle = self.triangles[tri_id]
+        if self.verbose:
+            print 'Splitting triangle'
+            print '    Removing triangle {}'.format(parent_triangle)
+        if self.summary:
+            self.nremoves += 1
+            self.ntriangles -= 1
         self.remove_triangle(tri_id)
         for a,b in itertools.combinations(parent_triangle, 2):
             new_triangle = sort([a, b, point_id])
+            if self.verbose:
+                print '    Adding triangle {}'.format(new_triangle)
+            if self.summary:
+                self.nadds += 1
+                self.ntriangles +=1
             self.add_triangle(new_triangle)
             for key in itertools.combinations(new_triangle, 2):
                 if self.check_and_flip(key):
@@ -91,31 +112,27 @@ class Delaunay(object):
     def initial_triangles_from_hull(self):
         # Find point not in convex hull boundary and then use it to make
         # triangles with the convex hull boundary points.
+        if self.verbose:
+            print 'Selecting starting interior point...',
         for middle_point in range(len(self.points)):
             if middle_point not in self.convex_hull:
+                if self.verbose:
+                    print middle_point
                 break
 
         for h1,h2 in zip(self.convex_hull, np.concatenate((self.convex_hull[1:],
                                                            [self.convex_hull[0]]))):
             tri_edges = sort([h1, h2, middle_point])
+            if self.verbose:
+                print 'Creating initial triangle {}'.format(tri_edges)
+            if self.summary:
+                self.nadds += 1
+                self.ntriangles += 1
             self.add_triangle(tri_edges)
             for key in itertools.combinations(tri_edges, 2):
                 if self.check_and_flip(key):
                     break
 
-        #print 'after!'
-
-        for tri_id, triangle in self.triangles.iteritems():
-            for key in itertools.combinations(triangle, 2):
-                # Get the other triangle sharing this edge, if one exists.
-                if len(self.edge_mapping[key]) == 2:
-                    angle1 = self.get_angle(triangle, list(set(triangle)-set(key))[0])
-                    tri_id2 = list(self.edge_mapping[key].difference([tri_id]))[0]
-                    triangle2 = self.triangles[tri_id2]
-                    angle2 = self.get_angle(triangle2, list(set(triangle2)-set(key))[0])
-
-                    #if angle1+angle2 > math.pi:
-                        #print '!!! {}'.format(angle1+angle2)
         return middle_point
 
     def check_and_flip(self, shared_edge):
@@ -129,8 +146,11 @@ class Delaunay(object):
             angle2 = self.get_angle(tri2, list(set(tri2)-set(shared_edge))[0])
 
             if angle1+angle2 > math.pi:
+                if self.verbose:
+                    print '    Flipping triangles {} and {}'.format(tri1, tri2)
+                if self.summary:
+                    self.nflips += 1
                 self.flip(id1, id2)
-                #print '@@@ {}'.format(angle1+angle2)
                 return True
         return False
 
@@ -181,6 +201,9 @@ class Delaunay(object):
 
     def get_convex_hull(self):
         """Compute the convex hull of the point cloud using Graham scan."""
+        if self.verbose:
+            print 'Building convex hull...',
+
         # Start with the hull containing the lowest point in the point cloud.
         convex_hull = [np.argmin(self.points[:,1], 0)]
 
@@ -204,7 +227,10 @@ class Delaunay(object):
         if self.is_right_turn(convex_hull, convex_hull[0]):
             convex_hull.pop()
 
-        return np.array(convex_hull, dtype=np.int)
+        hull = np.array(convex_hull, dtype=np.int)
+        if self.verbose:
+            print hull
+        return hull
 
     def is_right_turn(self, convex_hull, id3):
         """Determines if point indicated by id is a "right turn" from the
@@ -283,7 +309,7 @@ class Delaunay(object):
     def validate_triangulation(self):
         """Go through the triangles and validate that the triangulation
         is Delaunay."""
-        print "Validation:"
+        print "Validation:",
         for tri_id, triangle in self.triangles.iteritems():
             [center_x, center_y], radius = self.get_circumcircle(triangle)
             outside_point_ids = [pid for pid in range(len(self.points))
@@ -291,30 +317,53 @@ class Delaunay(object):
             for pid in outside_point_ids:
                 dist = self.point_distance([center_x, center_y], self.points[pid])
                 if dist < radius:
-                    raise "Not Delaunay"
-        print "\tIs Delaunay!"
+                    raise AssertionError("not Delaunay triangulation")
+        print "is Delaunay!"
 
-        ##     for key in itertools.combinations(triangle, 2):
-        ##         # Get the other triangle sharing this edge, if one exists.
-        ##         if len(self.edge_mapping[key]) == 2:
-        ##             angle1 = self.get_angle(triangle, list(set(triangle)-set(key))[0])
-        ##             tri_id2 = list(self.edge_mapping[key].difference([tri_id]))[0]
-        ##             triangle2 = self.triangles[tri_id2]
-        ##             angle2 = self.get_angle(triangle2, list(set(triangle2)-set(key))[0])
-
-        ##             if angle1+angle2 > math.pi:
-        ##                 print "!!!\t{}".format(angle1+angle2)
-        ##                 raise "Not Delaunay"
-        ##             else:
-        ##                 print "\t{}".format(angle1+angle2)
-        ## print "\tIs Delaunay!"
+def parse_input():
+    parser = argparse.ArgumentParser(description='Compute Delaunay triangulation on a random point field.')
+    parser.add_argument('-n', '--npoints', dest='npoints', action='store',
+                        default=20,
+                        help='number of points in the randomly-generated point field')
+    parser.add_argument('--no-plot', dest='plot', action='store_false',
+                        default=True, help='suppress plotting the triangulation')
+    parser.add_argument('-s', '--seed', dest='seed', action='store', default=None,
+                        help='set the random seed (allows for reproducibility)')
+    parser.add_argument('--summary', dest='summary', action='store_true',
+                        default=False,
+                        help='compile triangulation summary information')
+    parser.add_argument('-v', '--verbose', dest='verbose', action='store_true',
+                        default=False,
+                        help='print information as the triangulation proceeds')
+    parser.add_argument('--validate', dest='validate', action='store_true',
+                        default=False,
+                        help='validate the computed triangulation is Delaunay')
+    return parser.parse_args()
 
 def delaunay():
-    d = Delaunay(100)
-    d.triangulation()
-    d.validate_triangulation()
-    d.plot()
-    show()
+    args = parse_input()
 
-if __name__ == '__main__':
-    delaunay()
+    if args.seed is not None:
+        d = Delaunay(int(args.npoints), seed=int(args.seed), summary=args.summary,
+                     verbose=args.verbose)
+    else:
+        d = Delaunay(int(args.npoints), verbose=args.verbose, summary=args.summary)
+    d.triangulation()
+    if args.summary:
+        summary_vals = [str(v) for v in [d.points.shape[0], d.ntriangles,
+                                         d.nadds, d.nremoves, d.nflips]]
+        max_val_len = max([len(v) for v in summary_vals])
+        summary_text = ['points', 'triangles', 'triangles added',
+                        'triangles removed', 'triangle flips']
+        min_text_len = min([len(t) for t in summary_text])
+        print '\n============= Summary ============='
+        for val, text in zip(summary_vals, summary_text):
+            print 'Number of {} {} {}{}'.format(text,
+                                                '.'*(14+min_text_len-len(text)),
+                                                ' '*(max_val_len-len(val)),
+                                                val)
+    if args.validate:
+        d.validate_triangulation()
+    if args.plot:
+        d.plot()
+        show()
