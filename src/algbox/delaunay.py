@@ -41,11 +41,11 @@ class Delaunay(object):
         self.triangles = {}
         self.edge_mapping = {}
 
-        middle_point = self.initial_triangles_from_hull()
+        self.initial_triangles_from_hull()
 
         # Add remaining points incrementally.
         remaining_points = [i for i in range(len(self.points))
-                            if i not in self.convex_hull and i != middle_point]
+                            if i not in self.convex_hull]
 
         for p in remaining_points:
             self._accounting('add_point', p)
@@ -142,31 +142,16 @@ class Delaunay(object):
             raise ValueError('unknown event')
 
     def initial_triangles_from_hull(self):
-        # Find point not in convex hull boundary and then use it to make
-        # triangles with the convex hull boundary points.
-        if len(self.points) == 3:
-            # Then no interior point exists.
-            tri_edges = [0, 1, 2]
-            self._accounting('select_interior', None)
-            self._accounting('create_initial', tri_edges)
-            self.add_triangle(tri_edges)
-            return None
-        
-        for middle_point in range(len(self.points)):
-            if middle_point not in self.convex_hull:
-                self._accounting('select_interior', middle_point)
-                break
-
-        for h1,h2 in zip(self.convex_hull, np.concatenate((self.convex_hull[1:],
-                                                           [self.convex_hull[0]]))):
-            tri_edges = sort([h1, h2, middle_point])
+        # Triangulate the convex hull.
+        start_point = self.convex_hull[0]
+        shifted_hull = np.concatenate((self.convex_hull[2:], [self.convex_hull[1]]))
+        for h1,h2 in zip(self.convex_hull[1:], shifted_hull)[:-1]:
+            tri_edges = sort([h1, h2, start_point])
             self._accounting('create_initial', tri_edges)
             self.add_triangle(tri_edges)
             for key in itertools.combinations(tri_edges, 2):
                 if self.check_and_flip(key):
                     break
-
-        return middle_point
 
     def check_and_flip(self, shared_edge):
         """Check an adjacent pair of triangles and flip if necessary."""
