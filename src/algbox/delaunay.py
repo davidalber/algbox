@@ -335,7 +335,7 @@ def parse_input():
     parser = argparse.ArgumentParser(description='Compute Delaunay triangulation on a random point field.')
     parser.add_argument('-n', '--npoints', dest='npoints', action='store',
                         default=20,
-                        help='number of points in the randomly-generated point field')
+                        help='number of points in the randomly-generated point field (default: %(default)s)')
     parser.add_argument('--no-plot', dest='plot', action='store_false',
                         default=True, help='suppress plotting the triangulation')
     parser.add_argument('-s', '--seed', dest='seed', action='store', default=None,
