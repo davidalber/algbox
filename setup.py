@@ -14,7 +14,7 @@ install_requires = [
 ]
 
 
-setup(name='Algbox',
+setup(name='algbox',
     version=version,
     description="A collection of implmentations done for learning.",
     long_description=README + '\n\n' + NEWS,
