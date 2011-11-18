@@ -112,6 +112,17 @@ class Delaunay(object):
     def initial_triangles_from_hull(self):
         # Find point not in convex hull boundary and then use it to make
         # triangles with the convex hull boundary points.
+        if len(self.points) == 3:
+            # Then no interior point exists.
+            tri_edges = [0, 1, 2]
+            if self.verbose:
+                print 'Creating initial triangle {}'.format(tri_edges)
+            if self.summary:
+                self.nadds += 1
+                self.ntriangles += 1
+            self.add_triangle(tri_edges)
+            return None
+
         if self.verbose:
             print 'Selecting starting interior point...',
         for middle_point in range(len(self.points)):
