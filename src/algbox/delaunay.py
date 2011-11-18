@@ -309,8 +309,12 @@ class Delaunay(object):
         ##                 print "\t{}".format(angle1+angle2)
         ## print "\tIs Delaunay!"
 
-d = Delaunay(100)
-d.triangulation()
-d.validate_triangulation()
-d.plot()
-show()
+def delaunay():
+    d = Delaunay(100)
+    d.triangulation()
+    d.validate_triangulation()
+    d.plot()
+    show()
+
+if __name__ == '__main__':
+    delaunay()
