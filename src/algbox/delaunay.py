@@ -48,8 +48,7 @@ class Delaunay(object):
                             if i not in self.convex_hull and i != middle_point]
 
         for p in remaining_points:
-            if self.verbose:
-                print 'Adding point {}'.format(p)
+            self._accounting('add_point', p)
             in_triangle = self.point_in_triangle(p)
             self.split_triangle(in_triangle, p)
 
@@ -57,20 +56,14 @@ class Delaunay(object):
         """Split the triangle with ID tri_id into three triangles using the
         given point_id."""
         parent_triangle = self.triangles[tri_id]
-        if self.verbose:
-            print 'Splitting triangle'
-            print '    Removing triangle {}'.format(parent_triangle)
+        self._accounting('split', parent_triangle)
         if self.summary:
             self.nremoves += 1
             self.ntriangles -= 1
         self.remove_triangle(tri_id)
         for a,b in itertools.combinations(parent_triangle, 2):
             new_triangle = sort([a, b, point_id])
-            if self.verbose:
-                print '    Adding triangle {}'.format(new_triangle)
-            if self.summary:
-                self.nadds += 1
-                self.ntriangles +=1
+            self._accounting('add_triangle', new_triangle)
             self.add_triangle(new_triangle)
             for key in itertools.combinations(new_triangle, 2):
                 if self.check_and_flip(key):
@@ -109,36 +102,65 @@ class Delaunay(object):
                 del(self.edge_mapping[key])
         del(self.triangles[id])
 
+    def _accounting(self, event, data=None):
+        """This method is used to print and record information about the
+        triangulation. It only has effect when the user requests verbose
+        output or the summary."""
+        if not self.summary and not self.verbose:
+            return
+        if event == 'add_point':
+            if self.verbose:
+                print 'Adding point {}'.format(data)
+        elif event == 'add_triangle':
+            if self.verbose:
+                print '    Adding triangle {}'.format(data)
+            if self.summary:
+                self.nadds += 1
+                self.ntriangles +=1
+        elif event == 'build_hull':
+            if self.verbose:
+                print 'Building convex hull... {}'.format(data)
+        elif event == 'create_initial':
+            if self.verbose:
+                print 'Creating initial triangle {}'.format(data)
+            if self.summary:
+                self.nadds += 1
+                self.ntriangles += 1
+        elif event == 'flip':
+            if self.verbose:
+                print '    Flipping triangles {} and {}'.format(data[0], data[1])
+            if self.summary:
+                self.nflips += 1
+        elif event == 'select_interior':
+            if self.verbose:
+                print 'Selecting starting interior point... {}'.format(data)
+        elif event == 'split':
+            if self.verbose:
+                print 'Splitting triangle'
+                print '    Removing triangle {}'.format(data)
+        else:
+            raise ValueError('unknown event')
+
     def initial_triangles_from_hull(self):
         # Find point not in convex hull boundary and then use it to make
         # triangles with the convex hull boundary points.
         if len(self.points) == 3:
             # Then no interior point exists.
             tri_edges = [0, 1, 2]
-            if self.verbose:
-                print 'Creating initial triangle {}'.format(tri_edges)
-            if self.summary:
-                self.nadds += 1
-                self.ntriangles += 1
+            self._accounting('select_interior', None)
+            self._accounting('create_initial', tri_edges)
             self.add_triangle(tri_edges)
             return None
-
-        if self.verbose:
-            print 'Selecting starting interior point...',
+        
         for middle_point in range(len(self.points)):
             if middle_point not in self.convex_hull:
-                if self.verbose:
-                    print middle_point
+                self._accounting('select_interior', middle_point)
                 break
 
         for h1,h2 in zip(self.convex_hull, np.concatenate((self.convex_hull[1:],
                                                            [self.convex_hull[0]]))):
             tri_edges = sort([h1, h2, middle_point])
-            if self.verbose:
-                print 'Creating initial triangle {}'.format(tri_edges)
-            if self.summary:
-                self.nadds += 1
-                self.ntriangles += 1
+            self._accounting('create_initial', tri_edges)
             self.add_triangle(tri_edges)
             for key in itertools.combinations(tri_edges, 2):
                 if self.check_and_flip(key):
@@ -157,10 +179,7 @@ class Delaunay(object):
             angle2 = self.get_angle(tri2, list(set(tri2)-set(shared_edge))[0])
 
             if angle1+angle2 > math.pi:
-                if self.verbose:
-                    print '    Flipping triangles {} and {}'.format(tri1, tri2)
-                if self.summary:
-                    self.nflips += 1
+                self._accounting('flip', [tri1, tri2])
                 self.flip(id1, id2)
                 return True
         return False
@@ -212,9 +231,6 @@ class Delaunay(object):
 
     def get_convex_hull(self):
         """Compute the convex hull of the point cloud using Graham scan."""
-        if self.verbose:
-            print 'Building convex hull...',
-
         # Start with the hull containing the lowest point in the point cloud.
         convex_hull = [np.argmin(self.points[:,1], 0)]
 
@@ -239,8 +255,7 @@ class Delaunay(object):
             convex_hull.pop()
 
         hull = np.array(convex_hull, dtype=np.int)
-        if self.verbose:
-            print hull
+        self._accounting('build_hull', hull)
         return hull
 
     def is_right_turn(self, convex_hull, id3):
