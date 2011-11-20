@@ -32,7 +32,7 @@ setup(name='algbox',
     install_requires=install_requires,
     entry_points={
         'console_scripts':
-            ['delaunay=algbox:do_delaunay']
+            ['delaunay=algbox:delaunay.delaunay']
     },
     test_suite = 'tests'
 )
