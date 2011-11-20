@@ -34,7 +34,7 @@ class Delaunay(object):
     def y(self):
         return self.points[:,1]
 
-    def triangulation(self):
+    def compute_triangulation(self):
         self.convex_hull = self.get_convex_hull()
 
         self.triangle_id = 0
@@ -156,8 +156,7 @@ class Delaunay(object):
     def check_and_flip(self, shared_edge):
         """Check an adjacent pair of triangles and flip if necessary."""
         if len(self.edge_mapping[shared_edge]) == 2:
-            id1 = list(self.edge_mapping[shared_edge])[0]
-            id2 = list(self.edge_mapping[shared_edge])[1]
+            id1, id2 = list(self.edge_mapping[shared_edge])
             tri1 = self.triangles[id1]
             angle1 = self.get_angle(tri1, list(set(tri1)-set(shared_edge))[0])
             tri2 = self.triangles[id2]
@@ -166,11 +165,31 @@ class Delaunay(object):
             if angle1+angle2 > math.pi:
                 self._accounting('flip', [tri1, tri2])
                 self.flip(id1, id2)
+
+                # Check flipped triangles for the Delaunay condition and
+                # flip as necessary.
+                for key in itertools.combinations(self.triangles[id1], 2):
+                    if self.check_and_flip(key):
+                        break
+
+                for key in itertools.combinations(self.triangles[id2], 2):
+                    if self.check_and_flip(key):
+                        break
+
                 return True
         return False
 
     def flip(self, id1, id2):
-        """Flip the common edge between two adjacent triangles."""
+        """Flip the common edge between two adjacent triangles.
+
+        This should only be called for pairs of triangles where all four
+        points are in the convex hull formed by the triangles' points.
+        This constraint is not an issue for calls from method
+        check_and_flip because triangle pairs where only three points
+        are in the convex hull do not violate the opposite angle
+        condition (i.e., the sum of the triangle corner angles opposite
+        the common edge are guaranteed to be less then 180 degrees
+        when only three points are in the convex hull)."""
         tri1 = self.triangles[id1]
         tri2 = self.triangles[id2]
         shared_edge = sort(list(set(tri1).intersection(tri2)))
@@ -185,6 +204,9 @@ class Delaunay(object):
         self.triangles[id1] = new_tri1
         self.triangles[id2] = new_tri2
 
+        # Update edge_mapping, replacing triangle 2 with triangle 1
+        # (and vice versa) for edges that were transferred between
+        # triangles.
         for key in itertools.combinations(new_tri1, 2):
             if key != tuple(new_edge):
                 self.edge_mapping[key].difference_update([id2])
@@ -194,14 +216,6 @@ class Delaunay(object):
             if key != tuple(new_edge):
                 self.edge_mapping[key].difference_update([id1])
                 self.edge_mapping[key].add(id2)
-
-        for key in itertools.combinations(self.triangles[id1], 2):
-            if self.check_and_flip(key):
-                break
-
-        for key in itertools.combinations(self.triangles[id2], 2):
-            if self.check_and_flip(key):
-                break
 
     def get_angle(self, triangle, corner):
         """Find the angle of the given corner of the given triangle."""
@@ -279,6 +293,7 @@ class Delaunay(object):
         collection = PatchCollection(patches, cmap=matplotlib.cm.jet, alpha=0.1)
         collection.set_array(np.array(colors))
         ax.add_collection(collection)
+
         axis((0, 1, 0, 1))
 
     def draw_circumcircle(self, triangle):
@@ -320,7 +335,6 @@ class Delaunay(object):
     def validate_triangulation(self):
         """Go through the triangles and validate that the triangulation
         is Delaunay."""
-        print "Validation:",
         for tri_id, triangle in self.triangles.iteritems():
             [center_x, center_y], radius = self.get_circumcircle(triangle)
             outside_point_ids = [pid for pid in range(len(self.points))
@@ -328,8 +342,8 @@ class Delaunay(object):
             for pid in outside_point_ids:
                 dist = self.point_distance([center_x, center_y], self.points[pid])
                 if dist < radius:
-                    raise AssertionError("not Delaunay triangulation")
-        print "is Delaunay!"
+                    return False
+        return True
 
 def parse_input():
     parser = argparse.ArgumentParser(description='Compute Delaunay triangulation on a random point field.')
@@ -359,7 +373,7 @@ def delaunay():
                      verbose=args.verbose)
     else:
         d = Delaunay(int(args.npoints), verbose=args.verbose, summary=args.summary)
-    d.triangulation()
+    d.compute_triangulation()
     if args.summary:
         summary_vals = [str(v) for v in [d.points.shape[0], d.ntriangles,
                                          d.nadds, d.nremoves, d.nflips]]
@@ -374,7 +388,10 @@ def delaunay():
                                                 ' '*(max_val_len-len(val)),
                                                 val)
     if args.validate:
-        d.validate_triangulation()
+        if d.validate_triangulation():
+            print "Validation: is Delaunay!"
+        else:
+            print "Validation: is not Delaunay!"
     if args.plot:
         d.plot()
         show()
