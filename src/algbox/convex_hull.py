@@ -73,21 +73,3 @@ class ConvexHull(object):
     def point_distance(p1, p2):
         """Computes the distance between two points."""
         return math.sqrt(math.pow(p1[0] - p2[0], 2) + math.pow(p1[1] - p2[1], 2))
-
-    def plot(self):
-        """Plot the point field and convex hull."""
-        fig = plt.figure(figsize=(8,8))
-        ax = plt.axes([0,0,1,1])
-        plot(self.x, self.y, 'ok')
-
-        # Draw hull.
-        hull_points = np.array([self.points[pid] for pid in self])
-        patches = []
-        patches.append(Polygon(hull_points))
-
-        colors = 100*np.random.rand(len(patches))
-        collection = PatchCollection(patches, cmap=matplotlib.cm.jet, alpha=0.1, lw=2, linestyle='solid')
-        collection.set_array(np.array(colors))
-        ax.add_collection(collection)
-
-        axis((0, 1, 0, 1))
