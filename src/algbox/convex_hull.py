@@ -6,6 +6,15 @@ class ConvexHull(object):
         self.points = points
         self.compute_hull()
 
+    def __contains__(self, val):
+        return val in self.convex_hull
+
+    def __getitem__(self, index):
+        return self.convex_hull[index]
+
+    def __len__(self):
+        return len(self.convex_hull)
+
     @property
     def x(self):
         return self.points[:,0]

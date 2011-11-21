@@ -94,7 +94,7 @@ class TestDelaunay(unittest.TestCase):
         tri_point_ids = set(d.triangles[id1]).union(set(d.triangles[id2]))
         triangles_points = np.array([d.points[id] for id in list(tri_point_ids)])
         chull = ConvexHull(triangles_points)
-        return len(chull.hull) == 4
+        return len(chull) == 4
 
     def test_validation_bad_triangulation(self):
         """Test the validation method by taking a correct triangulation,

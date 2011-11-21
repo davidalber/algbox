@@ -36,8 +36,7 @@ class Delaunay(object):
         return self.points[:,1]
 
     def compute_triangulation(self):
-        chull = ConvexHull(self.points)
-        self.convex_hull = chull.hull
+        self.convex_hull = ConvexHull(self.points)
 
         self.triangle_id = 0
         self.triangles = {}

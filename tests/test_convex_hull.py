@@ -72,3 +72,52 @@ class TestConvexHull(unittest.TestCase):
         p1 = np.array([3.5, 7.4])
         p2 = np.array([-6, -9.2])
         self.assertEquals(ConvexHull.point_distance(p1, p2), 19.126160095534075)
+
+    def test_contains(self):
+        """Test to verify that statements like
+
+            >>> ch = ConvexHull(points)
+            >>> 3 in ch
+
+        behave as expected."""
+        n = 25
+        seed(1)
+        points = np.array([random() for i in range(2*n)]).reshape((n,2))
+        ch = ConvexHull(points)
+        expected = [13, 23, 16, 20, 12, 10, 14, 19, 1]
+        self.assertTrue(np.all(expected == ch.hull))
+        for exp in expected:
+            self.assertTrue(exp in ch)
+        self.assertFalse(15 in ch)
+        self.assertFalse(25 in ch)
+
+    def test_len(self):
+        """Test to verify statements like
+
+            >>> ch = ConvexHull(points)
+            >>> len(ch)
+
+        behave as expected."""
+        n = 25
+        seed(1)
+        points = np.array([random() for i in range(2*n)]).reshape((n,2))
+        ch = ConvexHull(points)
+        self.assertTrue(np.all([13, 23, 16, 20, 12, 10, 14, 19, 1] == ch.hull))
+        self.assertEquals(len(ch), 9)
+
+    def test_getitem(self):
+        """Test to verify statements like
+
+            >>> ch = ConvexHull(points)
+            >>> ch[0]
+
+        behave as expected."""
+        n = 25
+        seed(1)
+        points = np.array([random() for i in range(2*n)]).reshape((n,2))
+        ch = ConvexHull(points)
+        expected = [13, 23, 16, 20, 12, 10, 14, 19, 1]
+        self.assertTrue(np.all(expected == ch.hull))
+        for i in range(len(ch)):
+            self.assertEquals(ch[i], expected[i])
+        self.assertRaises(IndexError, ch.__getitem__, len(ch))
