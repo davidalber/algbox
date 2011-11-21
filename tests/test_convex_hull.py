@@ -29,7 +29,7 @@ class TestConvexHull(unittest.TestCase):
         ch = ConvexHull(points)
         self.assertTrue(np.all([1, 0, 2] == ch.hull))
 
-    def test_hull_n150(self):
+    def test_hull_n25(self):
         n = 25
         seed(1)
         points = np.array([random() for i in range(2*n)]).reshape((n,2))
