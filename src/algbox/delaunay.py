@@ -4,6 +4,7 @@ import numpy as np
 import random
 import itertools
 import math
+from algbox.convex_hull import ConvexHull
 
 import matplotlib.pyplot as plt
 from matplotlib.collections import PatchCollection
@@ -35,7 +36,8 @@ class Delaunay(object):
         return self.points[:,1]
 
     def compute_triangulation(self):
-        self.convex_hull = self.get_convex_hull()
+        chull = ConvexHull(self.points)
+        self.convex_hull = chull.hull
 
         self.triangle_id = 0
         self.triangles = {}
@@ -227,48 +229,6 @@ class Delaunay(object):
         c = self.point_distance(self.points[corner], self.points[non_corner[1]])
 
         return math.acos((math.pow(b, 2) + math.pow(c, 2) - math.pow(a, 2)) / (2*b*c))
-
-    def get_convex_hull(self):
-        """Compute the convex hull of the point cloud using Graham scan."""
-        # Start with the hull containing the lowest point in the point cloud.
-        convex_hull = [np.argmin(self.points[:,1], 0)]
-
-        # Get the cosines of the angles of all lines between the "lowest" point
-        # and all other points.
-        ids_and_cos = np.array([[i,self.line_cosine(convex_hull[0], i)] for i in range(len(self.points)) if i != convex_hull[0]])
-
-        # Get a sorted list of point ids for points furthest to right (by
-        # angle) to furthest left, from the perspective of the lowest point.
-        ids = ids_and_cos[np.argsort(ids_and_cos[:,1], 0)][::-1][:,0]
-
-        # Now go through the sorted list
-        convex_hull.append(ids[0])
-        for pid in ids[1:]:
-            while self.is_right_turn(convex_hull, pid):
-                convex_hull.pop()
-            convex_hull.append(pid)
-
-        # Make sure the last point added does not introduce a right turn
-        # to our first point.
-        if self.is_right_turn(convex_hull, convex_hull[0]):
-            convex_hull.pop()
-
-        hull = np.array(convex_hull, dtype=np.int)
-        self._accounting('build_hull', hull)
-        return hull
-
-    def is_right_turn(self, convex_hull, id3):
-        """Determines if point indicated by id is a "right turn" from the
-        line made by the last two points in the convex hull."""
-        id1 = convex_hull[-2]
-        id2 = convex_hull[-1]
-        cross_prod = (self.x[id2] - self.x[id1])*(self.y[id3] - self.y[id1]) - \
-                     (self.y[id2] - self.y[id1])*(self.x[id3] - self.x[id1])
-        return cross_prod < 0
-
-    def line_cosine(self, id1, id2):
-        return (self.x[id2] - self.x[id1]) / self.point_distance(self.points[id1],
-                                                                 self.points[id2])
 
     @staticmethod
     def point_distance(p1, p2):

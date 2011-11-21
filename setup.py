@@ -34,5 +34,5 @@ setup(name='algbox',
         'console_scripts':
             ['delaunay=algbox:delaunay.delaunay']
     },
-    test_suite = 'tests'
+    test_suite = 'tests.tests'
 )
