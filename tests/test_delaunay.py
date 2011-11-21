@@ -3,6 +3,7 @@ import itertools
 import math
 import numpy as np
 from algbox.delaunay import Delaunay
+from algbox.convex_hull import ConvexHull
 
 class TestDelaunay(unittest.TestCase):
     def correctness_tests(self, n, reps):
@@ -82,3 +83,40 @@ class TestDelaunay(unittest.TestCase):
 
         self.assertTrue(np.all(tri_edge_count == edge_mapping_count))
         self.assertEquals(np.max(tri_edge_count), 2)
+
+    @staticmethod
+    def shared_edge_angles_not_oblique(d, emap):
+        """Returns True if the angles of the shared edge between the
+        two triangles in emap are not oblique. Put another way, it
+        is True if the convex hull of the two triangles contains all
+        four unique points in the two triangles."""
+        id1, id2 = emap
+        tri_point_ids = set(d.triangles[id1]).union(set(d.triangles[id2]))
+        triangles_points = np.array([d.points[id] for id in list(tri_point_ids)])
+        chull = ConvexHull(triangles_points)
+        return len(chull.hull) == 4
+
+    def test_validation_bad_triangulation(self):
+        """Test the validation method by taking a correct triangulation,
+        flip a pair of triangles, verify the new triangulation is bad,
+        restore the triangulation, and move to a new pair of triangles.
+
+        Only triangle pairs that have a convex hull containing their four
+        unique points are included in the flipping."""
+        n = 25
+        d = Delaunay(n=n, seed=50)
+        d.compute_triangulation()
+
+        self.assertTrue(d.validate_triangulation())
+        self.assertTrue(self.validate_through_flip_check(d))
+
+        # Now break the triangulation.
+        for emap in d.edge_mapping.values():
+            if len(emap) == 2 and self.shared_edge_angles_not_oblique(d, emap):
+                id1, id2 = emap
+                d.flip(id1, id2)
+                self.assertFalse(d.validate_triangulation())
+                self.assertFalse(self.validate_through_flip_check(d))
+                d.flip(id1, id2)
+                self.assertTrue(d.validate_triangulation())
+                self.assertTrue(self.validate_through_flip_check(d))
