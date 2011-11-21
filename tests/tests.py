@@ -1,2 +1,3 @@
 from test_convex_hull import TestConvexHull
+from test_convex_hulls import TestConvexHulls
 from test_delaunay import TestDelaunay

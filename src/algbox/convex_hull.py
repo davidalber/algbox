@@ -1,13 +1,5 @@
-import argparse
-import itertools
 import numpy as np
 import math
-from random import random, seed
-from pylab import axis, matplotlib, plot, Polygon, show
-
-import matplotlib.pyplot as plt
-from matplotlib.collections import PatchCollection
-import matplotlib.patches as mpatches
 
 class ConvexHull(object):
     def __init__(self, points):
@@ -99,26 +91,3 @@ class ConvexHull(object):
         ax.add_collection(collection)
 
         axis((0, 1, 0, 1))
-
-def parse_input():
-    parser = argparse.ArgumentParser(description='Compute convex hull of a random point field.')
-    parser.add_argument('-n', '--npoints', dest='npoints', action='store',
-                        default=20,
-                        help='number of points in the randomly-generated point field (default: %(default)s)')
-    parser.add_argument('-s', '--seed', dest='seed', action='store', default=None,
-                        help='set the random seed (allows for reproducibility)')
-    return parser.parse_args()
-
-def gen_random_points(n):
-    """Generate random points in [0,1] x [0,1]."""
-    return np.array([random() for i in range(2*n)]).reshape((n,2))
-
-def convex_hull():
-    args = parse_input()
-
-    if args.seed is not None:
-        seed(int(args.seed))
-    points = gen_random_points(int(args.npoints))
-    ch = ConvexHull(points)
-    ch.plot()
-    show()
